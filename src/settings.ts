@@ -1,4 +1,5 @@
 import { LanguageEnum } from '@/enums/LanguageEnum';
+import { fa } from 'element-plus/es/locale/index.mjs';
 
 const setting: DefaultSettings = {
   /**
@@ -6,12 +7,12 @@ const setting: DefaultSettings = {
    */
   title: import.meta.env.VITE_APP_TITLE,
 
-  theme: '#409EFF',
+  theme: '#00CED1',
 
   /**
    * 侧边栏主题 深色主题theme-dark，浅色主题theme-light
    */
-  sideTheme: 'theme-dark',
+  sideTheme: 'theme-light',
   /**
    * 是否系统布局配置
    */
@@ -40,7 +41,7 @@ const setting: DefaultSettings = {
   /**
    * 是否显示logo
    */
-  sidebarLogo: true,
+  sidebarLogo: false,
 
   /**
    * 是否显示动态标题
