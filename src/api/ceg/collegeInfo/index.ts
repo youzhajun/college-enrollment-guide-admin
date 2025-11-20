@@ -61,3 +61,14 @@ export const delCollegeInfo = (id: string | number | Array<string | number>) => 
     method: 'delete'
   });
 };
+
+/**
+ * 查询办学性质列表
+ * @returns {*}
+ */
+export const queryInstitutionNatureList = (): AxiosPromise<string[]> => {
+  return request({
+    url: '/ceg/collegeInfo/queryInstitutionNatureList',
+    method: 'get'
+  });
+};

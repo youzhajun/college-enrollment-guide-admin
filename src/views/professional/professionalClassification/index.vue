@@ -5,13 +5,16 @@
         <el-card shadow="hover">
           <el-form ref="queryFormRef" :model="queryParams" :inline="true">
             <el-form-item label="教育层级" prop="educationHierarchy">
-              <el-input v-model="queryParams.educationHierarchy" placeholder="请输入教育层级" clearable @keyup.enter="handleQuery" />
+              <el-select v-model="queryParams.educationHierarchy" placeholder="请选择教育层级" clearable style="width: 200px">
+                <el-option label="专科" value="专科" />
+                <el-option label="本科" value="本科" />
+              </el-select>
             </el-form-item>
-            <el-form-item label="专业国家编码" prop="code">
-              <el-input v-model="queryParams.code" placeholder="请输入专业国家编码" clearable @keyup.enter="handleQuery" />
+            <el-form-item label="国家-专业编码" prop="code" label-width="auto">
+              <el-input v-model="queryParams.code" placeholder="请输入编码- 国家定义专业编码" clearable @keyup.enter="handleQuery" />
             </el-form-item>
-            <el-form-item label="专业名称" prop="name">
-              <el-input v-model="queryParams.name" placeholder="请输入专业名称(国家定义)" clearable @keyup.enter="handleQuery" />
+            <el-form-item label="国家-专业名称" prop="name" label-width="auto">
+              <el-input v-model="queryParams.name" placeholder="请输入专业名称" clearable @keyup.enter="handleQuery" />
             </el-form-item>
             <el-form-item>
               <el-button type="primary" icon="Search" @click="handleQuery">搜索</el-button>
@@ -35,17 +38,36 @@
             <el-button type="danger" plain icon="Delete" :disabled="multiple" @click="handleDelete()" v-hasPermi="['professional:professionalClassification:remove']">删除</el-button>
           </el-col>
           <el-col :span="1.5">
-            <el-button type="warning" plain icon="Download" @click="handleExport" v-hasPermi="['professional:professionalClassification:export']">导出</el-button>
+            <el-dropdown class="mt-[1px]">
+              <el-button plain type="info">
+                更多
+                <el-icon class="el-icon--right"><arrow-down /></el-icon>
+              </el-button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item icon="Download" @click="importTemplate">下载模板</el-dropdown-item>
+                  <el-dropdown-item v-if="checkPermi(['professional:professionalClassification:import'])" icon="Top" @click="handleImport">导入数据</el-dropdown-item>
+                  <el-dropdown-item v-if="checkPermi(['professional:professionalClassification:export'])" icon="Download" @click="handleExport">导出数据</el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
           </el-col>
           <right-toolbar v-model:showSearch="showSearch" @queryTable="getList"></right-toolbar>
         </el-row>
       </template>
 
-      <el-table v-loading="loading" border :data="professionalClassificationList" @selection-change="handleSelectionChange">
+      <el-table 
+        v-loading="loading" 
+        border 
+        :data="professionalClassificationList" 
+        @selection-change="handleSelectionChange"
+        row-key="id"
+        :tree-props="{ children: 'children', hasChildren: 'hasChildren' }"
+        >
         <el-table-column type="selection" width="55" align="center" />
+        <el-table-column label="国家-专业编码" align="center" prop="code" />
+        <el-table-column label="国家-专业名称" align="center" prop="name" />
         <el-table-column label="教育层级" align="center" prop="educationHierarchy" />
-        <el-table-column label="编码-国家" align="center" prop="code" />
-        <el-table-column label="专业名称" align="center" prop="name" />
         <el-table-column label="操作" align="center" fixed="right"  class-name="small-padding fixed-width">
           <template #default="scope">
             <el-tooltip content="修改" placement="top">
@@ -62,18 +84,15 @@
     </el-card>
     <!-- 添加或修改专业分类对话框 -->
     <el-dialog :title="dialog.title" v-model="dialog.visible" width="500px" append-to-body>
-      <el-form ref="professionalClassificationFormRef" :model="form" :rules="rules" label-width="120px">
-        <el-form-item label="教育层级" prop="educationHierarchy">
+      <el-form ref="professionalClassificationFormRef" :model="form" :rules="rules" label-width="80px">
+        <el-form-item label="教育层级" prop="educationHierarchy" label-width="auto">
           <el-input v-model="form.educationHierarchy" placeholder="请输入教育层级" />
         </el-form-item>
-        <el-form-item label="专业编码-国家" prop="code">
-          <el-input v-model="form.code" placeholder="请输入专业编码" />
+        <el-form-item label="专业编码" prop="code" label-width="auto" >
+          <el-input v-model="form.code" placeholder="请输入编码(国家定义)" :disabled="!!form.id" />
         </el-form-item>
-        <el-form-item label="专业名称" prop="name">
-          <el-input v-model="form.name" placeholder="请输入专业名称" />
-        </el-form-item>
-        <el-form-item label="层级" prop="hierarchy">
-          <el-input v-model="form.hierarchy" placeholder="请输入层级" />
+        <el-form-item label="专业名称" prop="name" label-width="auto">
+          <el-input v-model="form.name" placeholder="请输入专业名称(国家定义)" />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -83,16 +102,56 @@
         </div>
       </template>
     </el-dialog>
+    <!-- 导入对话框 -->
+    <el-dialog v-model="upload.open" :title="upload.title" width="400px" append-to-body>
+      <el-upload
+        ref="uploadRef"
+        :limit="1"
+        accept=".xlsx, .xls"
+        :headers="upload.headers"
+        :action="upload.url + '?updateSupport=' + upload.updateSupport"
+        :disabled="upload.isUploading"
+        :on-progress="handleFileUploadProgress"
+        :on-success="handleFileSuccess"
+        :on-error="handleFileError"
+        :auto-upload="false"
+        drag
+      >
+        <el-icon class="el-icon--upload">
+          <i-ep-upload-filled />
+        </el-icon>
+        <div class="el-upload__text">将文件拖到此处，或<em>点击上传</em></div>
+        <template #tip>
+          <div class="text-center el-upload__tip">
+            <div style="margin-bottom: 10px;">
+              <el-checkbox v-model="uploadWarningConfirmed">我已阅读并确认</el-checkbox>
+            </div>
+            <p style="color: #f56c6c;">请注意！此项操作会清空原有数据！！！请谨慎操作！！</p>
+            <span>仅允许导入xls、xlsx格式文件。</span>
+            <el-link type="primary" :underline="false" style="font-size: 12px; vertical-align: baseline" @click="importTemplate">下载模板</el-link>
+          </div>
+        </template>
+      </el-upload>
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button type="primary" :disabled="!uploadWarningConfirmed || upload.isUploading" @click="submitFileForm">确 定</el-button>
+          <el-button @click="upload.open = false">取 消</el-button>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup name="ProfessionalClassification" lang="ts">
-import { listProfessionalClassification, getProfessionalClassification, delProfessionalClassification, addProfessionalClassification, updateProfessionalClassification } from '@/api/professional/professionalClassification';
+import { listProfessionalClassification, getProfessionalClassification, delProfessionalClassification, addProfessionalClassification, updateProfessionalClassification, treeProfessionalClassification } from '@/api/professional/professionalClassification';
+import { globalHeaders } from '@/utils/request';
+import { checkPermi } from '@/utils/permission';
 import { ProfessionalClassificationVO, ProfessionalClassificationQuery, ProfessionalClassificationForm } from '@/api/professional/professionalClassification/types';
 
 const { proxy } = getCurrentInstance() as ComponentInternalInstance;
 
 const professionalClassificationList = ref<ProfessionalClassificationVO[]>([]);
+const allTreeData = ref<ProfessionalClassificationVO[]>([]); // 存储所有树形数据
 const buttonLoading = ref(false);
 const loading = ref(true);
 const showSearch = ref(true);
@@ -103,11 +162,23 @@ const total = ref(0);
 
 const queryFormRef = ref<ElFormInstance>();
 const professionalClassificationFormRef = ref<ElFormInstance>();
+const uploadRef = ref<ElUploadInstance>();
 
 const dialog = reactive<DialogOption>({
   visible: false,
   title: ''
 });
+
+const upload = reactive<ImportOption>({
+  open: false,
+  title: '',
+  isUploading: false,
+  updateSupport: 0,
+  headers: globalHeaders(),
+  url: import.meta.env.VITE_APP_BASE_API + '/professional/professionalClassification/importData'
+});
+
+const uploadWarningConfirmed = ref(false);
 
 const initFormData: ProfessionalClassificationForm = {
   id: undefined,
@@ -129,27 +200,94 @@ const data = reactive<PageData<ProfessionalClassificationForm, ProfessionalClass
     }
   },
   rules: {
+    id: [
+      { required: true, message: "主键不能为空", trigger: "blur" }
+    ],
     educationHierarchy: [
       { required: true, message: "教育层级不能为空", trigger: "blur" }
     ],
     code: [
-      { required: true, message: "专业编码-国家不能为空", trigger: "blur" }
+      { required: true, message: "编码(国家定义)不能为空", trigger: "blur" }
     ],
     name: [
-      { required: true, message: "专业名称不能为空", trigger: "blur" }
+      { required: true, message: "专业名称(国家定义)不能为空", trigger: "blur" }
+    ],
+    hierarchy: [
+      { required: true, message: "层级不能为空", trigger: "blur" }
     ]
   }
 });
 
 const { queryParams, form, rules } = toRefs(data);
 
+/** 过滤树形数据 */
+const filterTree = (tree: ProfessionalClassificationVO[], params: ProfessionalClassificationQuery): ProfessionalClassificationVO[] => {
+  const { educationHierarchy, code, name } = params;
+  
+  // 如果没有搜索条件，直接返回原树
+  if (!educationHierarchy && !code && !name) {
+    return JSON.parse(JSON.stringify(tree)); // 深拷贝避免修改原数据
+  }
+  
+  const filter = (nodes: ProfessionalClassificationVO[]): ProfessionalClassificationVO[] => {
+    return nodes.filter(node => {
+      let match = true;
+      
+      if (educationHierarchy && node.educationHierarchy !== educationHierarchy) {
+        match = false;
+      }
+      if (code && !node.code?.includes(code)) {
+        match = false;
+      }
+      if (name && !node.name?.includes(name)) {
+        match = false;
+      }
+      
+      // 递归过滤子节点
+      if (node.children && node.children.length > 0) {
+        node.children = filter(node.children);
+        // 如果有子节点匹配，父节点也要保留
+        if (node.children.length > 0) {
+          match = true;
+        }
+      }
+      
+      return match;
+    }).map(node => ({ ...node })); // 深拷贝避免修改原数据
+  };
+  
+  return filter(JSON.parse(JSON.stringify(tree)));
+};
+
+/** 对根节点进行分页 */
+const paginateRootNodes = (rootNodes: ProfessionalClassificationVO[], pageNum: number, pageSize: number): ProfessionalClassificationVO[] => {
+  const start = (pageNum - 1) * pageSize;
+  const end = start + pageSize;
+  return rootNodes.slice(start, end);
+};
+
 /** 查询专业分类列表 */
 const getList = async () => {
   loading.value = true;
-  const res = await listProfessionalClassification(queryParams.value);
-  professionalClassificationList.value = res.rows;
-  total.value = res.total;
-  loading.value = false;
+  try {
+    // 获取树形结构数据
+    const res = await treeProfessionalClassification(queryParams.value);
+    allTreeData.value = res.data || [];
+    
+    // 过滤数据
+    const filteredTree = filterTree(allTreeData.value, queryParams.value);
+    
+    // 总数是根节点的数量
+    total.value = filteredTree.length;
+    
+    // 对根节点进行分页（每个根节点及其所有子节点作为一个整体）
+    const pageNum = queryParams.value.pageNum || 1;
+    const pageSize = queryParams.value.pageSize || 10;
+    professionalClassificationList.value = paginateRootNodes(filteredTree, pageNum, pageSize);
+    
+  } finally {
+    loading.value = false;
+  }
 }
 
 /** 取消按钮 */
@@ -231,6 +369,56 @@ const handleExport = () => {
   proxy?.download('professional/professionalClassification/export', {
     ...queryParams.value
   }, `professionalClassification_${new Date().getTime()}.xlsx`)
+}
+
+/** 下载模板 */
+const importTemplate = () => {
+  proxy?.download('professional/professionalClassification/importTemplate', {}, `professionalClassification_template_${new Date().getTime()}.xlsx`);
+};
+
+/** 导入按钮操作 */
+const handleImport = () => {
+  upload.title = '专业分类导入';
+  upload.open = true;
+  uploadWarningConfirmed.value = false;
+};
+
+/** 文件上传中处理 */
+const handleFileUploadProgress = () => {
+  upload.isUploading = true;
+};
+
+/** 文件上传成功处理 */
+const handleFileSuccess = (response: any, file: UploadFile) => {
+  upload.open = false;
+  upload.isUploading = false;
+  uploadWarningConfirmed.value = false;
+  uploadRef.value?.handleRemove(file);
+  proxy?.$modal.closeLoading();
+  ElMessageBox.alert("<div style='overflow: auto;overflow-x: hidden;max-height: 70vh;padding: 10px 20px 0;'>" + response.msg + '</div>', '导入结果', {
+    dangerouslyUseHTMLString: true
+  });
+  getList();
+};
+
+/** 文件上传失败处理 */
+const handleFileError = (error: any, file: UploadFile) => {
+  upload.isUploading = false;
+  uploadWarningConfirmed.value = false;
+  proxy?.$modal.closeLoading();
+  ElMessage.error('文件上传失败，请重试');
+  uploadRef.value?.handleRemove(file);
+};
+
+/** 提交上传文件 */
+function submitFileForm() {
+  if (!uploadWarningConfirmed.value) {
+    ElMessage.warning('请先确认已阅读并理解提示信息');
+    return;
+  }
+  proxy?.$modal.loading('正在导入数据，请稍候...');
+  upload.isUploading = true;
+  uploadRef.value?.submit();
 }
 
 onMounted(() => {

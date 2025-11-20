@@ -13,6 +13,11 @@
             <el-form-item label="学校隶属信息" label-width="auto" prop="affiliationInfo">
               <el-input v-model="queryParams.affiliationInfo" placeholder="请输入学校隶属信息" clearable @keyup.enter="handleQuery" />
             </el-form-item>
+            <el-form-item label="办学性质" prop="institutionNature">
+              <el-select v-model="queryParams.institutionNature" placeholder="请选择办学性质" clearable>
+                <el-option v-for="item in institutionNatureOptions" :key="item" :label="item" :value="item" />
+              </el-select>
+            </el-form-item>
             <el-form-item>
               <el-button type="primary" icon="Search" @click="handleQuery">搜索</el-button>
               <el-button icon="Refresh" @click="resetQuery">重置</el-button>
@@ -38,9 +43,21 @@
               >删除</el-button
             >
           </el-col>
-          <!-- <el-col :span="1.5">
-            <el-button type="warning" plain icon="Download" @click="handleExport" v-hasPermi="['ceg:collegeInfo:export']">导出</el-button>
-          </el-col> -->
+          <el-col :span="1.5">
+            <el-dropdown class="mt-[1px]">
+              <el-button plain type="info">
+                更多
+                <el-icon class="el-icon--right"><arrow-down /></el-icon>
+              </el-button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item icon="Download" @click="importTemplate">下载模板</el-dropdown-item>
+                  <el-dropdown-item v-if="checkPermi(['ceg:collegeInfo:import'])" icon="Top" @click="handleImport">导入数据</el-dropdown-item>
+                  <el-dropdown-item v-if="checkPermi(['ceg:collegeInfo:export'])" icon="Download" @click="handleExport">导出数据</el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
+          </el-col>
           <right-toolbar v-model:showSearch="showSearch" @queryTable="getList"></right-toolbar>
         </el-row>
       </template>
@@ -71,45 +88,114 @@
 
       <pagination v-show="total > 0" :total="total" v-model:page="queryParams.pageNum" v-model:limit="queryParams.pageSize" @pagination="getList" />
     </el-card>
+    <!-- 导入对话框 -->
+    <el-dialog v-model="upload.open" :title="upload.title" width="400px" append-to-body>
+      <el-upload
+        ref="uploadRef"
+        :limit="1"
+        accept=".xlsx, .xls"
+        :headers="upload.headers"
+        :action="upload.url + '?updateSupport=' + upload.updateSupport"
+        :disabled="upload.isUploading"
+        :on-progress="handleFileUploadProgress"
+        :on-success="handleFileSuccess"
+        :on-error="handleFileError"
+        :auto-upload="false"
+        drag
+      >
+        <el-icon class="el-icon--upload">
+          <i-ep-upload-filled />
+        </el-icon>
+        <div class="el-upload__text">将文件拖到此处，或<em>点击上传</em></div>
+        <template #tip>
+          <div class="text-center el-upload__tip">
+            <!-- <div class="el-upload__tip"><el-checkbox v-model="upload.updateSupport" />是否更新已经存在的数据</div> -->
+            <div style="margin-bottom: 10px;">
+              <el-checkbox v-model="uploadWarningConfirmed">我已阅读并确认</el-checkbox>
+            </div>
+            <p style="color: #f56c6c;">请注意！院校代码不能重复，如果系统中已经存在相同的代码，则会更新原有数据，请谨慎操作。</p>
+            <span>仅允许导入xls、xlsx格式文件。</span>
+            <el-link type="primary" :underline="false" style="font-size: 12px; vertical-align: baseline" @click="importTemplate">下载模板</el-link>
+          </div>
+        </template>
+      </el-upload>
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button type="primary" :disabled="!uploadWarningConfirmed || upload.isUploading" @click="submitFileForm">确 定</el-button>
+          <el-button @click="upload.open = false">取 消</el-button>
+        </div>
+      </template>
+    </el-dialog>
     <!-- 添加或修改院校信息对话框 -->
-    <el-dialog :title="dialog.title" v-model="dialog.visible" width="700px" append-to-body>
+    <el-dialog :title="dialog.title" v-model="dialog.visible" width="900px" append-to-body>
       <el-form ref="collegeInfoFormRef" :model="form" :rules="rules" label-width="120px">
-        <el-form-item label="院校名称" prop="collegeName">
-          <el-input v-model="form.collegeName" placeholder="请输入院校名称" />
-        </el-form-item>
-        <el-form-item label="院校代码" prop="collegeCode">
-          <el-input v-model="form.collegeCode" placeholder="请输入院校代码" />
-        </el-form-item>
-        <el-form-item label="学校隶属信息" prop="affiliationInfo">
-          <el-input v-model="form.affiliationInfo" placeholder="请输入学校隶属信息" />
-        </el-form-item>
-        <el-form-item label="办学性质" prop="institutionNature">
-          <el-input v-model="form.institutionNature" placeholder="请输入办学性质" />
-        </el-form-item>
-        <el-form-item label="学校类别" prop="collegeType">
-          <el-input v-model="form.collegeType" placeholder="请输入学校类别" />
-        </el-form-item>
-        <el-form-item label="学校地址信息" prop="addressInfo">
-          <el-input v-model="form.addressInfo" placeholder="请输入学校地址信息" />
-        </el-form-item>
-        <el-form-item label="官网地址" prop="officialWebsiteUrl">
-          <el-input v-model="form.officialWebsiteUrl" placeholder="请输入官网地址" />
-        </el-form-item>
-        <el-form-item label="百科地址" prop="baikeUrl">
-          <el-input v-model="form.baikeUrl" placeholder="请输入百科地址" />
-        </el-form-item>
-        <el-form-item label="硕士点" prop="baikeUrl">
-          <el-input v-model="form.flagPostgraduate" placeholder="请选择" />
-        </el-form-item>
-        <el-form-item label="博士点" prop="baikeUrl">
-          <el-input v-model="form.flagPhd" placeholder="请选择" />
-        </el-form-item>
-        <el-form-item label="双高计划" prop="baikeUrl">
-          <el-input v-model="form.flagDoubleHeightPlan" placeholder="请输入双高计划类目" />
-        </el-form-item>
-        <el-form-item label="示范院校" prop="baikeUrl">
-          <el-input v-model="form.flagDemonstrateVocationalCollege" placeholder="请输入示范院校类目" />
-        </el-form-item>
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <el-form-item label="院校名称" prop="collegeName">
+              <el-input v-model="form.collegeName" placeholder="请输入院校名称" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="院校代码" prop="collegeCode">
+              <el-input v-model="form.collegeCode" placeholder="请输入院校代码" :disabled="!!form.id" />
+            </el-form-item>
+          </el-col>
+
+          <el-col :span="12">
+            <el-form-item label="办学性质" prop="institutionNature">
+              <el-input v-model="form.institutionNature" placeholder="请输入办学性质" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="学校隶属信息" prop="affiliationInfo">
+              <el-input v-model="form.affiliationInfo" placeholder="请输入学校隶属信息" />
+            </el-form-item>
+          </el-col>
+
+          <el-col :span="12">
+            <el-form-item label="学校类别" prop="collegeType">
+              <el-input v-model="form.collegeType" placeholder="请输入学校类别" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="学校地址信息" prop="addressInfo">
+              <el-input v-model="form.addressInfo" placeholder="请输入学校地址信息" />
+            </el-form-item>
+          </el-col>
+
+          <el-col :span="12">
+            <el-form-item label="官网地址" prop="officialWebsiteUrl">
+              <el-input v-model="form.officialWebsiteUrl" placeholder="请输入官网地址" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="百科地址" prop="baikeUrl">
+              <el-input v-model="form.baikeUrl" placeholder="请输入百科地址" />
+            </el-form-item>
+          </el-col>
+
+          <el-col :span="12">
+            <el-form-item label="硕士点" prop="flagPostgraduate">
+              <el-input v-model="form.flagPostgraduate" placeholder="请选择" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="博士点" prop="flagPhd">
+              <el-input v-model="form.flagPhd" placeholder="请选择" />
+            </el-form-item>
+          </el-col>
+
+          <el-col :span="12">
+            <el-form-item label="双高计划" prop="flagDoubleHeightPlan">
+              <el-input v-model="form.flagDoubleHeightPlan" placeholder="请输入双高计划类目" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="示范院校" prop="flagDemonstrateVocationalCollege">
+              <el-input v-model="form.flagDemonstrateVocationalCollege" placeholder="请输入示范院校类目" />
+            </el-form-item>
+          </el-col>
+        </el-row>
       </el-form>
       <template #footer>
         <div class="dialog-footer">
@@ -122,7 +208,9 @@
 </template>
 
 <script setup name="CollegeInfo" lang="ts">
-import { listCollegeInfo, getCollegeInfo, delCollegeInfo, addCollegeInfo, updateCollegeInfo } from '@/api/ceg/collegeInfo';
+import { listCollegeInfo, getCollegeInfo, delCollegeInfo, addCollegeInfo, updateCollegeInfo, queryInstitutionNatureList } from '@/api/ceg/collegeInfo';
+import { globalHeaders } from '@/utils/request';
+import { checkPermi } from '@/utils/permission';
 import { CollegeInfoVO, CollegeInfoQuery, CollegeInfoForm } from '@/api/ceg/collegeInfo/types';
 
 const { proxy } = getCurrentInstance() as ComponentInternalInstance;
@@ -138,11 +226,24 @@ const total = ref(0);
 
 const queryFormRef = ref<ElFormInstance>();
 const collegeInfoFormRef = ref<ElFormInstance>();
+const uploadRef = ref<ElUploadInstance>();
 
 const dialog = reactive<DialogOption>({
   visible: false,
   title: ''
 });
+
+const upload = reactive<ImportOption>({
+  open: false,
+  title: '',
+  isUploading: false,
+  updateSupport: 0,
+  headers: globalHeaders(),
+  url: import.meta.env.VITE_APP_BASE_API + '/ceg/collegeInfo/importData'
+});
+
+const uploadWarningConfirmed = ref(false);
+const institutionNatureOptions = ref<string[]>([]);
 
 const initFormData: CollegeInfoForm = {
   id: undefined,
@@ -280,7 +381,62 @@ const handleExport = () => {
   );
 };
 
+const importTemplate = () => {
+  proxy?.download('ceg/collegeInfo/importTemplate', {}, `collegeInfo_template_${new Date().getTime()}.xlsx`);
+};
+
+const handleImport = () => {
+  upload.title = '院校信息导入';
+  upload.open = true;
+  uploadWarningConfirmed.value = false;
+};
+
+const handleFileUploadProgress = () => {
+  upload.isUploading = true;
+};
+
+const handleFileSuccess = (response: any, file: UploadFile) => {
+  upload.open = false;
+  upload.isUploading = false;
+  uploadWarningConfirmed.value = false;
+  uploadRef.value?.handleRemove(file);
+  proxy?.$modal.closeLoading();
+  ElMessageBox.alert("<div style='overflow: auto;overflow-x: hidden;max-height: 70vh;padding: 10px 20px 0;'>" + response.msg + '</div>', '导入结果', {
+    dangerouslyUseHTMLString: true
+  });
+  getList();
+};
+
+const handleFileError = (error: any, file: UploadFile) => {
+  upload.isUploading = false;
+  uploadWarningConfirmed.value = false;
+  proxy?.$modal.closeLoading();
+  ElMessage.error('文件上传失败，请重试');
+  uploadRef.value?.handleRemove(file);
+};
+
+function submitFileForm() {
+  if (!uploadWarningConfirmed.value) {
+    ElMessage.warning('请先确认已阅读并理解提示信息');
+    return;
+  }
+  proxy?.$modal.loading('正在导入数据，请稍候...');
+  upload.isUploading = true;
+  uploadRef.value?.submit();
+}
+
+/** 获取办学性质列表 */
+const getInstitutionNatureList = async () => {
+  try {
+    const res = await queryInstitutionNatureList();
+    institutionNatureOptions.value = res.data || [];
+  } catch (error) {
+    console.error('获取办学性质列表失败:', error);
+  }
+};
+
 onMounted(() => {
   getList();
+  getInstitutionNatureList();
 });
 </script>

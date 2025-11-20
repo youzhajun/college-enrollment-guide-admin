@@ -61,3 +61,16 @@ export const delProfessionalClassification = (id: string | number | Array<string
     method: 'delete'
   });
 };
+
+/**
+ * 查询专业分类树形结构
+ * @param query
+ * @returns {*}
+ */
+export const treeProfessionalClassification = (query?: ProfessionalClassificationQuery): AxiosPromise<ProfessionalClassificationVO[]> => {
+  return request({
+    url: '/professional/professionalClassification/tree',
+    method: 'get',
+    params: query
+  });
+};

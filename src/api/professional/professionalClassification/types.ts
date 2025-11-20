@@ -24,6 +24,16 @@ export interface ProfessionalClassificationVO {
    */
   hierarchy: string;
 
+  /**
+   * 子节点
+   */
+  children?: ProfessionalClassificationVO[];
+
+  /**
+   * 是否有子节点
+   */
+  hasChildren?: boolean;
+
 }
 
 export interface ProfessionalClassificationForm extends BaseEntity {
