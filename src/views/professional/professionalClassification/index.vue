@@ -103,39 +103,47 @@
       </template>
     </el-dialog>
     <!-- 导入对话框 -->
-    <el-dialog v-model="upload.open" :title="upload.title" width="400px" append-to-body>
-      <el-upload
-        ref="uploadRef"
-        :limit="1"
-        accept=".xlsx, .xls"
-        :headers="upload.headers"
-        :action="upload.url + '?updateSupport=' + upload.updateSupport"
-        :disabled="upload.isUploading"
-        :on-progress="handleFileUploadProgress"
-        :on-success="handleFileSuccess"
-        :on-error="handleFileError"
-        :auto-upload="false"
-        drag
-      >
-        <el-icon class="el-icon--upload">
-          <i-ep-upload-filled />
-        </el-icon>
-        <div class="el-upload__text">将文件拖到此处，或<em>点击上传</em></div>
-        <template #tip>
-          <div class="text-center el-upload__tip">
-            <div style="margin-bottom: 10px;">
-              <el-checkbox v-model="uploadWarningConfirmed">我已阅读并确认</el-checkbox>
-            </div>
+    <el-dialog v-model="upload.open" :title="upload.title" width="600px" append-to-body>
+      <el-form ref="uploadFormRef" :model="uploadForm" :rules="uploadRules" label-width="100px">
+        <el-form-item label="教育层级" prop="collegeLevel">
+          <el-select v-model="uploadForm.collegeLevel" placeholder="请选择教育层级" style="width: 100%">
+            <el-option label="专科" value="专科" />
+            <el-option label="本科" value="本科" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="导入文件">
+          <el-upload
+            ref="uploadRef"
+            :limit="1"
+            accept=".xlsx, .xls"
+            :disabled="upload.isUploading"
+            :on-change="handleFileChange"
+            :auto-upload="false"
+            drag
+          >
+            <el-icon class="el-icon--upload">
+              <i-ep-upload-filled />
+            </el-icon>
+            <div class="el-upload__text">将文件拖到此处，或<em>点击上传</em></div>
+            <template #tip>
+              <div class="text-center el-upload__tip">
+                <span>仅允许导入xls、xlsx格式文件。</span>
+                <el-link type="primary" :underline="false" style="font-size: 12px; vertical-align: baseline" @click="importTemplate">下载模板</el-link>
+              </div>
+            </template>
+          </el-upload>
+        </el-form-item>
+        <el-form-item>
+          <div style="">
             <p style="color: #f56c6c;">请注意！此项操作会清空原有数据！！！请谨慎操作！！</p>
-            <span>仅允许导入xls、xlsx格式文件。</span>
-            <el-link type="primary" :underline="false" style="font-size: 12px; vertical-align: baseline" @click="importTemplate">下载模板</el-link>
+            <el-checkbox v-model="uploadWarningConfirmed">我已阅读并确认</el-checkbox>
           </div>
-        </template>
-      </el-upload>
+        </el-form-item>
+      </el-form>
       <template #footer>
         <div class="dialog-footer">
           <el-button type="primary" :disabled="!uploadWarningConfirmed || upload.isUploading" @click="submitFileForm">确 定</el-button>
-          <el-button @click="upload.open = false">取 消</el-button>
+          <el-button @click="cancelUpload">取 消</el-button>
         </div>
       </template>
     </el-dialog>
@@ -145,6 +153,7 @@
 <script setup name="ProfessionalClassification" lang="ts">
 import { listProfessionalClassification, getProfessionalClassification, delProfessionalClassification, addProfessionalClassification, updateProfessionalClassification, treeProfessionalClassification } from '@/api/professional/professionalClassification';
 import { globalHeaders } from '@/utils/request';
+import request from '@/utils/request';
 import { checkPermi } from '@/utils/permission';
 import { ProfessionalClassificationVO, ProfessionalClassificationQuery, ProfessionalClassificationForm } from '@/api/professional/professionalClassification/types';
 
@@ -163,6 +172,7 @@ const total = ref(0);
 const queryFormRef = ref<ElFormInstance>();
 const professionalClassificationFormRef = ref<ElFormInstance>();
 const uploadRef = ref<ElUploadInstance>();
+const uploadFormRef = ref<ElFormInstance>();
 
 const dialog = reactive<DialogOption>({
   visible: false,
@@ -179,6 +189,16 @@ const upload = reactive<ImportOption>({
 });
 
 const uploadWarningConfirmed = ref(false);
+const uploadForm = reactive({
+  collegeLevel: undefined as string | undefined,
+  file: undefined as UploadFile | undefined
+});
+
+const uploadRules = {
+  collegeLevel: [
+    { required: true, message: '请选择教育层级', trigger: 'change' }
+  ]
+};
 
 const initFormData: ProfessionalClassificationForm = {
   id: undefined,
@@ -381,44 +401,84 @@ const handleImport = () => {
   upload.title = '专业分类导入';
   upload.open = true;
   uploadWarningConfirmed.value = false;
+  uploadForm.collegeLevel = undefined;
+  uploadForm.file = undefined;
+  uploadFormRef.value?.resetFields();
+  uploadRef.value?.clearFiles();
 };
 
-/** 文件上传中处理 */
-const handleFileUploadProgress = () => {
-  upload.isUploading = true;
-};
-
-/** 文件上传成功处理 */
-const handleFileSuccess = (response: any, file: UploadFile) => {
+/** 取消导入 */
+const cancelUpload = () => {
   upload.open = false;
-  upload.isUploading = false;
   uploadWarningConfirmed.value = false;
-  uploadRef.value?.handleRemove(file);
-  proxy?.$modal.closeLoading();
-  ElMessageBox.alert("<div style='overflow: auto;overflow-x: hidden;max-height: 70vh;padding: 10px 20px 0;'>" + response.msg + '</div>', '导入结果', {
-    dangerouslyUseHTMLString: true
-  });
-  getList();
+  uploadForm.collegeLevel = undefined;
+  uploadForm.file = undefined;
+  uploadFormRef.value?.resetFields();
+  uploadRef.value?.clearFiles();
 };
 
-/** 文件上传失败处理 */
-const handleFileError = (error: any, file: UploadFile) => {
-  upload.isUploading = false;
-  uploadWarningConfirmed.value = false;
-  proxy?.$modal.closeLoading();
-  ElMessage.error('文件上传失败，请重试');
-  uploadRef.value?.handleRemove(file);
+/** 文件选择变化处理 */
+const handleFileChange = (file: UploadFile) => {
+  uploadForm.file = file;
 };
 
 /** 提交上传文件 */
 function submitFileForm() {
-  if (!uploadWarningConfirmed.value) {
-    ElMessage.warning('请先确认已阅读并理解提示信息');
-    return;
-  }
-  proxy?.$modal.loading('正在导入数据，请稍候...');
-  upload.isUploading = true;
-  uploadRef.value?.submit();
+  uploadFormRef.value?.validate(async (valid: boolean) => {
+    if (!valid) {
+      return;
+    }
+    if (!uploadWarningConfirmed.value) {
+      ElMessage.warning('请先确认已阅读并理解提示信息');
+      return;
+    }
+    if (!uploadForm.file) {
+      ElMessage.warning('请选择导入文件');
+      return;
+    }
+    if (!uploadForm.collegeLevel) {
+      ElMessage.warning('请选择教育层级');
+      return;
+    }
+
+    proxy?.$modal.loading('正在导入数据，请稍候...');
+    upload.isUploading = true;
+
+    try {
+      const formData = new FormData();
+      formData.append('file', uploadForm.file.raw as File);
+      formData.append('collegeLevel', uploadForm.collegeLevel);
+
+      const result = await request({
+        url: '/professional/professionalClassification/importData',
+        method: 'post',
+        data: formData,
+        headers: {
+          ...upload.headers
+        }
+      });
+
+      upload.open = false;
+      upload.isUploading = false;
+      uploadWarningConfirmed.value = false;
+      uploadForm.collegeLevel = undefined;
+      uploadForm.file = undefined;
+      uploadFormRef.value?.resetFields();
+      uploadRef.value?.clearFiles();
+      proxy?.$modal.closeLoading();
+      ElMessageBox.alert("<div style='overflow: auto;overflow-x: hidden;max-height: 70vh;padding: 10px 20px 0;'>" + result.msg + '</div>', '导入结果', {
+        dangerouslyUseHTMLString: true
+      });
+      await getList();
+    } catch (error: any) {
+      upload.isUploading = false;
+      uploadWarningConfirmed.value = false;
+      proxy?.$modal.closeLoading();
+      ElMessage.error(error.message || error.msg || '文件上传失败，请重试');
+      uploadRef.value?.clearFiles();
+      uploadForm.file = undefined;
+    }
+  });
 }
 
 onMounted(() => {
