@@ -3,7 +3,7 @@
     <el-row :gutter="20">
       <el-col :sm="24" :lg="12" style="padding-left: 20px">
         <h2>高考志愿填报指导系统</h2>
-        <p><b>当前版本:</b> <span>v5.5.1</span></p>
+        <p><b>当前版本:</b> <span>v0.0.1</span></p>
       </el-col>
     </el-row>
     <el-divider />

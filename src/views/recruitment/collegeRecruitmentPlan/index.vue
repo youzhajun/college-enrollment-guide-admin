@@ -5,18 +5,31 @@
         <el-card shadow="hover">
           <el-form ref="queryFormRef" :model="queryParams" :inline="true">
             <el-form-item label="招生年份" prop="recruitmentYear" label-width="100">
-              <el-select v-model="queryParams.recruitmentYear" placeholder="请选择招生年份" clearable style="width: 200px">
-                <el-option v-for="item in selectData.recruitmentYear" :key="item" :label="String(item)" :value="item" />
-              </el-select>
+              <el-date-picker
+                v-model="queryParams.recruitmentYear"
+                type="year"
+                value-format="YYYY"
+                placeholder="请选择招生年份"
+                style="width: 200px"
+              />
             </el-form-item>
-            <el-form-item label="报考专业代码" prop="majorCodeCollege" label-width="100">
-              <el-input v-model="queryParams.majorCodeCollege" placeholder="请输入报考专业代码" clearable @keyup.enter="handleQuery" />
+            <el-form-item label="教育层次" prop="educationHierarchy" label-width="100">
+              <el-select v-model="queryParams.educationHierarchy" placeholder="请选择教育层次" clearable style="width: 200px">
+                <el-option v-for="item in selectData.educationHierarchy" :key="item" :label="item" :value="item"/>
+              </el-select>
             </el-form-item>
             <el-form-item label="专业名称" prop="majorName" label-width="100">
               <el-input v-model="queryParams.majorName" placeholder="请输入专业名称" clearable @keyup.enter="handleQuery" />
             </el-form-item>
+          
             <el-form-item label="专业代码" prop="majorCodeNational" label-width="100">
               <el-input v-model="queryParams.majorCodeNational" placeholder="请输入专业代码" clearable @keyup.enter="handleQuery" />
+            </el-form-item>
+            <el-form-item label="标签" prop="enrollmentChangeTag" label-width="100">
+              <el-select v-model="queryParams.enrollmentChangeTag" placeholder="请选择标签" clearable style="width: 200px">
+                <el-option label="扩招" value="EXPAND" />
+                <el-option label="减招" value="REDUCE" />
+              </el-select>
             </el-form-item>
             <el-form-item label="选科限制" prop="subjectRestriction" label-width="100">
               <el-select v-model="queryParams.subjectRestriction" placeholder="请选择选科限制" clearable style="width: 200px">
@@ -43,10 +56,8 @@
                 <el-option v-for="item in selectData.institutionNature" :key="item" :label="item" :value="item" />
               </el-select>
             </el-form-item>
-            <el-form-item label="教育层次" prop="educationHierarchy" label-width="100">
-              <el-select v-model="queryParams.educationHierarchy" placeholder="请选择教育层次" clearable style="width: 200px">
-                <el-option v-for="item in selectData.educationHierarchy" :key="item" :label="item" :value="item" />
-              </el-select>
+            <el-form-item label="报考专业代码" prop="majorCodeCollege" label-width="100">
+              <el-input v-model="queryParams.majorCodeCollege" placeholder="请输入报考专业代码" clearable @keyup.enter="handleQuery" />
             </el-form-item>
             <el-form-item>
               <el-button type="primary" icon="Search" @click="handleQuery">搜索</el-button>
@@ -70,6 +81,9 @@
             <el-button type="danger" plain icon="Delete" :disabled="multiple" @click="handleDelete()" v-hasPermi="['recruitment:collegeRecruitmentPlan:remove']">删除</el-button>
           </el-col>
           <el-col :span="1.5">
+            <el-button type="info" plain icon="Upload" @click="handleImport" v-hasPermi="['recruitment:collegeRecruitmentPlan:import']">导入</el-button>
+          </el-col>
+          <el-col :span="1.5">
             <el-button type="warning" plain icon="Download" @click="handleExport" v-hasPermi="['recruitment:collegeRecruitmentPlan:export']">导出</el-button>
           </el-col>
           <right-toolbar v-model:showSearch="showSearch" @queryTable="getList"></right-toolbar>
@@ -88,8 +102,34 @@
         <el-table-column label="办学性质" align="center" prop="institutionNature" width="100"/>
         <el-table-column label="选科限制" align="center" prop="subjectRestriction" width="100"/>
         <el-table-column label="招生人数" align="center" prop="enrollmentNumbers" width="100"/>
+        <el-table-column label="上年招生人数" align="center" prop="lastYearEnrollmentNumbers" width="120"/>
+        <el-table-column label="上年招生人数差额" align="center" width="140">
+          <template #default="{ row }">
+            <span>{{ calcEnrollmentDiff(row) ?? '-' }}</span>
+          </template>
+        </el-table-column>
         <el-table-column label="学制" align="center" prop="studyYears" width="80"/>
         <el-table-column label="学费" align="center" prop="tuitionFee" width="80"/>
+        <el-table-column label="标签" align="center" min-width="180">
+          <template #default="{ row }">
+            <template v-if="calcEnrollmentDiff(row) !== undefined">
+              <el-tag
+                v-if="calcEnrollmentDiff(row)! > 0"
+                type="success"
+                size="small"
+              >
+                扩招
+              </el-tag>
+              <el-tag
+                v-else-if="calcEnrollmentDiff(row)! < 0"
+                type="danger"
+                size="small"
+              >
+                减招
+              </el-tag>
+            </template>
+          </template>
+        </el-table-column>
         <el-table-column label="学校隶属" align="center" prop="affiliationInfo" width="150"/>
         <el-table-column label="学校类别" align="center" prop="collegeType" width="100"/>
         <el-table-column label="学校地址" align="center" prop="addressInfo" width="150"/>
@@ -152,10 +192,69 @@
         </div>
       </template>
     </el-dialog>
+    <!-- 导入院校招生计划 -->
+    <el-dialog :title="importDialog.title" v-model="importDialog.visible" width="720px" append-to-body @closed="resetImportDialog">
+      <el-steps :active="importStepsActive" finish-status="success" align-center class="mb-4">
+        <el-step v-for="item in importSteps" :key="item" :title="item" />
+      </el-steps>
+      <div class="mb-4" v-show="importStepsActive === 0">
+        <el-alert type="error" show-icon :closable="false" title="此操作为高危操作，导入前会清除 **相对应年度、教育层级** 已有数据，请谨慎执行。" />
+      </div>
+      <div class="mb-4" v-show="importStepsActive === 1">
+        <p class="text-sm text-gray-500 mb-2">导入数据必须使用系统提供的 Excel 模板，请先下载模板并按要求填写。</p>
+        <el-button type="primary" plain icon="Download" @click="handleDownloadTemplate">下载模板</el-button>
+      </div>
+      <div class="mb-4" v-show="importStepsActive === 2">
+        <el-form ref="importFormRef" :model="importForm" :rules="importRules" label-width="100px">
+          <el-form-item label="招生年份" prop="recruitmentYear">
+            <el-date-picker v-model="importForm.recruitmentYear" type="year" value-format="YYYY" placeholder="请选择招生年份" style="width: 240px" />
+          </el-form-item>
+          <el-form-item label="教育层次" prop="educationHierarchy">
+            <el-select v-model="importForm.educationHierarchy" placeholder="请选择教育层次" clearable style="width: 240px">
+              <el-option v-for="item in selectData.educationHierarchy" :key="item" :label="item" :value="item" />
+            </el-select>
+          </el-form-item>
+        </el-form>
+      </div>
+      <div class="mb-4" v-show="importStepsActive === 3">
+        <el-upload
+          ref="importUploadRef"
+          drag
+          action="#"
+          :auto-upload="false"
+          :limit="1"
+          accept=".xls,.xlsx"
+          :file-list="importFileList"
+          :on-change="handleImportFileChange"
+          :on-remove="handleImportFileRemove"
+          :before-upload="() => false"
+        >
+          <i-ep-upload-filled />
+          <div class="el-upload__text">将文件拖拽至此或 <em>点击上传</em></div>
+          <template #tip>
+            <div class="el-upload__tip">仅支持 .xls / .xlsx 文件，大小请控制在系统限制内。</div>
+          </template>
+        </el-upload>
+      </div>
+      <template #footer>
+        <div class="dialog-footer flex justify-between">
+          <div>
+            <el-button @click="importDialog.visible = false">取 消</el-button>
+          </div>
+          <div>
+            <el-button v-if="importStepsActive > 0" @click="prevImportStep">上一步</el-button>
+            <el-button v-if="importStepsActive < importSteps.length - 1" type="primary" @click="nextImportStep">下一步</el-button>
+            <el-button v-else type="primary" :loading="importButtonLoading" @click="submitImport">确认导入</el-button>
+          </div>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup name="CollegeRecruitmentPlan" lang="ts">
+import dayjs from 'dayjs';
+import request, { globalHeaders } from '@/utils/request';
 import { listCollegeRecruitmentPlan, getCollegeRecruitmentPlan, delCollegeRecruitmentPlan, addCollegeRecruitmentPlan, updateCollegeRecruitmentPlan, getSelectData } from '@/api/recruitment/collegeRecruitmentPlan';
 import { CollegeRecruitmentPlanVO, CollegeRecruitmentPlanQuery, CollegeRecruitmentPlanForm } from '@/api/recruitment/collegeRecruitmentPlan/types';
 
@@ -190,11 +289,39 @@ const selectData = reactive<{
 
 const queryFormRef = ref<ElFormInstance>();
 const collegeRecruitmentPlanFormRef = ref<ElFormInstance>();
+const importFormRef = ref<ElFormInstance>();
+const importUploadRef = ref<ElUploadInstance>();
+const importFileList = ref<UploadFile[]>([]);
+const importButtonLoading = ref(false);
 
 const dialog = reactive<DialogOption>({
   visible: false,
   title: ''
 });
+const importDialog = reactive<DialogOption>({
+  visible: false,
+  title: ''
+});
+const importSteps = ['用户须知', '模板下载', '参数配置', '数据导入'];
+const importStepsActive = ref(0);
+const getDefaultRecruitmentYear = () => dayjs().format('YYYY');
+const importForm = reactive<{
+  recruitmentYear: string;
+  educationHierarchy?: string;
+  file?: UploadFile;
+}>({
+  recruitmentYear: getDefaultRecruitmentYear(),
+  educationHierarchy: undefined,
+  file: undefined
+});
+const importRules = {
+  recruitmentYear: [
+    { required: true, message: '请选择招生年份', trigger: 'change' }
+  ],
+  educationHierarchy: [
+    { required: true, message: '请选择教育层次', trigger: 'change' }
+  ]
+};
 
 const initFormData: CollegeRecruitmentPlanForm = {
   id: undefined,
@@ -216,7 +343,7 @@ const data = reactive<PageData<CollegeRecruitmentPlanForm, CollegeRecruitmentPla
     pageNum: 1,
     pageSize: 10,
     targetProvince: undefined,
-    recruitmentYear: undefined,
+    recruitmentYear: getDefaultRecruitmentYear(),
     collegeId: undefined,
     recruitmentType: undefined,
     majorName: undefined,
@@ -229,7 +356,8 @@ const data = reactive<PageData<CollegeRecruitmentPlanForm, CollegeRecruitmentPla
     flagDoubleHeightPlan: undefined,
     flagDemonstrateVocationalCollege: undefined,
     institutionNature: undefined,
-    educationHierarchy: undefined,
+    educationHierarchy: '专科',
+    enrollmentChangeTag: undefined,
     params: {
     }
   },
@@ -271,6 +399,115 @@ const data = reactive<PageData<CollegeRecruitmentPlanForm, CollegeRecruitmentPla
 });
 
 const { queryParams, form, rules } = toRefs(data);
+const setImportFormDefaults = () => {
+  importForm.recruitmentYear = getDefaultRecruitmentYear();
+  importForm.educationHierarchy = undefined;
+  importForm.file = undefined;
+  importFileList.value = [];
+};
+const handleImport = () => {
+  setImportFormDefaults();
+  importDialog.title = '导入院校招生计划';
+  importStepsActive.value = 0;
+  importDialog.visible = true;
+};
+const resetImportDialog = () => {
+  importFormRef.value?.resetFields();
+  importUploadRef.value?.clearFiles();
+  setImportFormDefaults();
+  importButtonLoading.value = false;
+  importStepsActive.value = 0;
+};
+const handleDownloadTemplate = () => {
+  proxy?.download('recruitment/collegeRecruitmentPlan/importTemplate', {}, 'collegeRecruitmentPlan_template.xlsx');
+};
+const handleImportFileChange = (uploadFile: UploadFile, uploadFiles: UploadFile[]) => {
+  importForm.file = uploadFile;
+  importFileList.value = uploadFiles.slice(-1);
+};
+const handleImportFileRemove = () => {
+  importForm.file = undefined;
+  importFileList.value = [];
+};
+const nextImportStep = () => {
+  if (importStepsActive.value >= importSteps.length - 1) {
+    return;
+  }
+  if (importStepsActive.value === 2) {
+    importFormRef.value?.validate((valid) => {
+      if (valid) {
+        importStepsActive.value += 1;
+      }
+    });
+    return;
+  }
+  importStepsActive.value += 1;
+};
+const prevImportStep = () => {
+  if (importStepsActive.value > 0) {
+    importStepsActive.value -= 1;
+  }
+};
+const submitImport = () => {
+  importFormRef.value?.validate(async (valid: boolean) => {
+    if (!valid) {
+      return;
+    }
+    if (!importForm.file?.raw) {
+      proxy?.$modal.msgWarning('请先上传导入文件');
+      return;
+    }
+    if (!importForm.educationHierarchy) {
+      proxy?.$modal.msgWarning('请选择教育层次');
+      return;
+    }
+    try {
+      await proxy?.$modal.confirm('该操作会清除本年度已有的招生计划数据，是否继续？');
+    } catch (error) {
+      return;
+    }
+    importButtonLoading.value = true;
+    proxy?.$modal.loading('正在导入数据，请稍候...');
+    try {
+      const formData = new FormData();
+      formData.append('file', importForm.file.raw as File);
+      formData.append('recruitmentYear', importForm.recruitmentYear);
+      formData.append('educationHierarchy', importForm.educationHierarchy as string);
+      const res = await request({
+        url: '/recruitment/collegeRecruitmentPlan/importData',
+        method: 'post',
+        data: formData,
+        headers: {
+          ...globalHeaders(),
+          'Content-Type': 'multipart/form-data'
+        },
+        timeout: 300000
+      });
+      importDialog.visible = false;
+      await getList();
+      ElMessageBox.alert("<div style='overflow: auto;overflow-x: hidden;max-height: 70vh;padding: 10px 20px 0;'>" + (res.msg || '导入成功') + '</div>', '导入结果', {
+        dangerouslyUseHTMLString: true
+      });
+    } catch (error: any) {
+      proxy?.$modal.msgError(error?.msg || error?.message || '导入失败，请稍后重试');
+    } finally {
+      importButtonLoading.value = false;
+      proxy?.$modal.closeLoading();
+    }
+  });
+};
+
+const calcEnrollmentDiff = (record: CollegeRecruitmentPlanVO) => {
+  if (
+    record == null ||
+    record.enrollmentNumbers == null ||
+    record.lastYearEnrollmentNumbers == null
+  ) {
+    return undefined;
+  }
+  const diff = Number(record.enrollmentNumbers) - Number(record.lastYearEnrollmentNumbers);
+  return Number.isNaN(diff) ? undefined : diff;
+};
 
 /** 查询院校招生计划列表 */
 const getList = async () => {
@@ -302,6 +539,7 @@ const handleQuery = () => {
 /** 重置按钮操作 */
 const resetQuery = () => {
   queryFormRef.value?.resetFields();
+  queryParams.value.recruitmentYear = getDefaultRecruitmentYear();
   handleQuery();
 }
 
@@ -374,6 +612,7 @@ const fetchSelectData = async () => {
       selectData.flagDoubleHeightPlan = res.data.flagDoubleHeightPlan || [];
       selectData.flagDemonstrateVocationalCollege = res.data.flagDemonstrateVocationalCollege || [];
       selectData.institutionNature = res.data.institutionNature || [];
+      selectData.educationHierarchy = (res.data.educationHierarchy && res.data.educationHierarchy.length) ? res.data.educationHierarchy : ['专科', '本科'];
     }
   } catch (error) {
     console.error('获取下拉框数据失败:', error);

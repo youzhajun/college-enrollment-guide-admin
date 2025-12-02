@@ -1,6 +1,6 @@
 import request from '@/utils/request';
 import { AxiosPromise } from 'axios';
-import { CollegeRecruitmentPlanVO, CollegeRecruitmentPlanForm, CollegeRecruitmentPlanQuery } from '@/api/recruitment/collegeRecruitmentPlan/types';
+import { CollegeRecruitmentPlanVO, CollegeRecruitmentPlanForm, CollegeRecruitmentPlanQuery, CollegeRecruitmentPlanSelectData } from '@/api/recruitment/collegeRecruitmentPlan/types';
 
 /**
  * 查询院校招生计划列表
@@ -66,14 +66,7 @@ export const delCollegeRecruitmentPlan = (id: string | number | Array<string | n
  * 获取下拉框数据
  * @returns {*}
  */
-export const getSelectData = (): AxiosPromise<{
-  recruitmentYear: number[];
-  recruitmentType: string[];
-  subjectRestriction: string[];
-  flagDoubleHeightPlan: string[];
-  flagDemonstrateVocationalCollege: string[];
-  institutionNature: string[];
-}> => {
+export const getSelectData = (): AxiosPromise<CollegeRecruitmentPlanSelectData> => {
   return request({
     url: '/recruitment/collegeRecruitmentPlan/selectData',
     method: 'get'

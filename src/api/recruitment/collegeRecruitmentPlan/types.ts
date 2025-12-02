@@ -60,6 +60,11 @@ export interface CollegeRecruitmentPlanVO {
   enrollmentNumbers: number;
 
   /**
+   * 上年招生人数
+   */
+  lastYearEnrollmentNumbers?: number;
+
+  /**
    * 学费
    */
   tuitionFee: number;
@@ -109,6 +114,11 @@ export interface CollegeRecruitmentPlanVO {
    */
   pMajorName?: string;
 
+  /**
+   * 标签集合
+   */
+  tags?: string[];
+
 }
 
 export interface CollegeRecruitmentPlanForm extends BaseEntity {
@@ -125,7 +135,7 @@ export interface CollegeRecruitmentPlanForm extends BaseEntity {
   /**
    * 招生年份
    */
-  recruitmentYear?: number;
+  recruitmentYear?: number | string;
 
   /**
    * 学校ID
@@ -184,7 +194,7 @@ export interface CollegeRecruitmentPlanQuery extends PageQuery {
   /**
    * 招生年份
    */
-  recruitmentYear?: number;
+  recruitmentYear?: number | string;
 
   /**
    * 学校ID
@@ -252,7 +262,22 @@ export interface CollegeRecruitmentPlanQuery extends PageQuery {
   educationHierarchy?: string;
 
   /**
+   * 招生变化标签
+   */
+  enrollmentChangeTag?: 'EXPAND' | 'REDUCE';
+
+  /**
    * 日期范围参数
    */
   params?: any;
+}
+
+export interface CollegeRecruitmentPlanSelectData {
+  recruitmentYear: number[];
+  recruitmentType: string[];
+  subjectRestriction: string[];
+  flagDoubleHeightPlan: string[];
+  flagDemonstrateVocationalCollege: string[];
+  institutionNature: string[];
+  educationHierarchy?: string[];
 }
